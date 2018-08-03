@@ -1,1 +1,1 @@
-add_library(permutohedral_lattice SHARED permutohedral_lattice_gpu.cu permutohedral_lattice_wrap.cc)
+add_library(permutohedral_lattice SHARED permutohedral_lattice_gpu.cu permutohedral_lattice_wrapper.cc)
