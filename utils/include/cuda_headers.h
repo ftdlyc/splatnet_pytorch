@@ -6,7 +6,7 @@
 #ifndef CUDA_BASE_CUDAHEADERS_H
 #define CUDA_BASE_CUDAHEADERS_H
 
-#define TOTAL_THREADS 512
+#define TOTAL_THREADS 1024
 
 inline int opt_n_threads(int work_size) {
   const int pow_2 = static_cast<int>(floorf(log2f(work_size)));

@@ -219,9 +219,9 @@ __host__ void compute_neighbors_and_gauss(int d, int n, int16_t *neighbors, floa
 //         keys        (b, n_points, d + 1, d)
 //         barycentric (b, n_points, d + 2)
 __global__ void init1_kernel(int d, int n_points,
-                             const float *position,
-                             int16_t *keys,
-                             float *barycentric) {
+                             const float *__restrict__ position,
+                             int16_t *__restrict__ keys,
+                             float *__restrict__ barycentric) {
   int batch_idx = blockIdx.x;
   int thread_idx = threadIdx.x;
   int d1 = d + 1;
@@ -327,8 +327,8 @@ __global__ void init1_kernel(int d, int n_points,
 //         offset         (b, n_points, d + 1)
 __global__ void init2_kernel(int d, int n_points,
                              HashTable *hash_tables,
-                             const int16_t *keys,
-                             int *offset) {
+                             const int16_t *__restrict__ keys,
+                             int *__restrict__ offset) {
   int batch_idx = blockIdx.x;
   HashTable &hash_table_ = hash_tables[batch_idx];
   int d1 = d + 1;
@@ -348,8 +348,8 @@ __global__ void init2_kernel(int d, int n_points,
 //         conv_neighbors (b, n_neighbors, n_filled)
 __global__ void init3_kernel(int d, int n_neighbors, int n_filled,
                              HashTable *hash_tables,
-                             const int16_t *neighbors,
-                             int *conv_neighbors) {
+                             const int16_t *__restrict__ neighbors,
+                             int *__restrict__ conv_neighbors) {
   int batch_idx = blockIdx.x;
   HashTable &hash_table_ = hash_tables[batch_idx];
   int d1 = d + 1;
@@ -389,10 +389,10 @@ __global__ void init3_kernel(int d, int n_neighbors, int n_filled,
 //         offset      (b, n_points, d + 1)
 //         barycentric (b, n_points, d + 2)
 __global__ void init4_kernel(int d, int n_points,
-                             const float *position,
+                             const float *__restrict__ position,
                              HashTable *hash_tables,
-                             int *offset,
-                             float *barycentric) {
+                             int *__restrict__ offset,
+                             float *__restrict__ barycentric) {
   int batch_idx = blockIdx.x;
   int thread_idx = threadIdx.x;
   HashTable &hash_table_ = hash_tables[batch_idx];
@@ -506,10 +506,10 @@ __global__ void init4_kernel(int d, int n_points,
 //         barycentric (b, n_points, d + 2)
 //         lattices    (b, df, n_filled)
 __global__ void splat_kernel(int d, int df, int n_points, int n_filled,
-                             const float *features,
-                             const int *offset,
-                             const float *barycentric,
-                             float *lattices) {
+                             const float *__restrict__ features,
+                             const int *__restrict__ offset,
+                             const float *__restrict__ barycentric,
+                             float *__restrict__ lattices) {
   int batch_idx = blockIdx.x;
 
   for (int i = threadIdx.y; i < df; i += blockDim.y) {
@@ -530,10 +530,10 @@ __global__ void splat_kernel(int d, int df, int n_points, int n_filled,
 //        conv_neighbors (b, n_neighbors, n_filled)
 //        lattices_out   (b, df_out, n_filled)
 __global__ void conv_kernel(int df_in, int df_out, int n_filled, int n_neighbors,
-                            const float *lattices_in,
-                            const float *conv_weights,
-                            const int *conv_neighbors,
-                            float *lattices_out) {
+                            const float *__restrict__ lattices_in,
+                            const float *__restrict__ conv_weights,
+                            const int *__restrict__ conv_neighbors,
+                            float *__restrict__ lattices_out) {
   int batch_idx = blockIdx.x;
 
   for (int i = threadIdx.y; i < df_out; i += blockDim.y) {
@@ -558,9 +558,9 @@ __global__ void conv_kernel(int df_in, int df_out, int n_filled, int n_neighbors
 //         conv_neighbors (b, n_neighbors, n_filled)
 //         col            (df * n_neighbors, n_filled)
 __global__ void img2col_kernel(int b, int df_in, int n_filled, int n_neighbors,
-                               const float *lattices,
-                               const int *conv_neighbors,
-                               float *col) {
+                               const float *__restrict__ lattices,
+                               const int *__restrict__ conv_neighbors,
+                               float *__restrict__ col) {
   int df_in_index = blockIdx.x;
   const float *lattices_ = lattices + (b * df_in + df_in_index) * n_filled;
 
@@ -578,10 +578,10 @@ __global__ void img2col_kernel(int b, int df_in, int n_filled, int n_neighbors,
 //         barycentric (b, n_points, d + 2)
 //         features    (b, df, n_points)
 __global__ void slice_kernel(int d, int df, int n_points, int n_filled,
-                             const float *lattices,
-                             const int *offset,
-                             const float *barycentric,
-                             float *features) {
+                             const float *__restrict__ lattices,
+                             const int *__restrict__ offset,
+                             const float *__restrict__ barycentric,
+                             float *__restrict__ features) {
   int batch_idx = blockIdx.x;
 
   for (int i = threadIdx.y; i < df; i += blockDim.y) {
@@ -603,22 +603,23 @@ __global__ void slice_kernel(int d, int df, int n_points, int n_filled,
 //         barycentric (b, n_points, d + 2)
 //         grad_in     (b, df, n_points)
 __global__ void splat_grad_kernel(int d, int df, int n_points, int n_filled,
-                                  const float *grad_out,
-                                  const int *offset,
-                                  const float *barycentric,
-                                  float *grad_in) {
+                                  const float *__restrict__ grad_out,
+                                  const int *__restrict__ offset,
+                                  const float *__restrict__ barycentric,
+                                  float *__restrict__ grad_in) {
   int batch_idx = blockIdx.x;
 
   for (int i = threadIdx.y; i < df; i += blockDim.y) {
     for (int j = threadIdx.x; j < n_points; j += blockDim.x) {
-      float &grad_in_ = grad_in[(batch_idx * df + i) * n_points + j];
 
+      float sum = 0;
       for (int k = 0; k < (d + 1); ++k) {
         int offset_ = offset[(batch_idx * n_points + j) * (d + 1) + k];
         float barycentric_ = barycentric[(batch_idx * n_points + j) * (d + 2) + k];
         float grad_out_ = grad_out[(batch_idx * df + i) * n_filled + offset_];
-        grad_in_ += barycentric_ * grad_out_;
+        sum += barycentric_ * grad_out_;
       }
+      grad_in[(batch_idx * df + i) * n_points + j] = sum;
     }
   }
 }
@@ -628,10 +629,10 @@ __global__ void splat_grad_kernel(int d, int df, int n_points, int n_filled,
 //        conv_neighbors (b, n_neighbors, n_filled)
 //        grad_in        (b, df_in, n_filled)
 __global__ void conv_grad_kernel(int df_in, int df_out, int n_filled, int n_neighbors,
-                                 const float *grad_out,
-                                 const float *conv_weights,
-                                 const int *conv_neighbors,
-                                 float *grad_in) {
+                                 const float *__restrict__ grad_out,
+                                 const float *__restrict__ conv_weights,
+                                 const int *__restrict__ conv_neighbors,
+                                 float *__restrict__ grad_in) {
   int batch_idx = blockIdx.x;
 
   for (int i = threadIdx.y; i < df_out; i += blockDim.y) {
@@ -655,9 +656,9 @@ __global__ void conv_grad_kernel(int df_in, int df_out, int n_filled, int n_neig
 //        conv_neighbors (b, n_neighbors, n_filled)
 //        col_grad       (df_out * n_neighbors, n_filled)
 __global__ void img2col_grad_kernel(int b, int df_out, int n_filled, int n_neighbors,
-                                    const float *grad_out,
-                                    const int *conv_neighbors,
-                                    float *col_grad) {
+                                    const float *__restrict__ grad_out,
+                                    const int *__restrict__ conv_neighbors,
+                                    float *__restrict__ col_grad) {
   int df_out_index = blockIdx.x;
   const float *grad_out_ = grad_out + (b * df_out + df_out_index) * n_filled;
 
@@ -675,10 +676,10 @@ __global__ void img2col_grad_kernel(int b, int df_out, int n_filled, int n_neigh
 //         barycentric (b, n_points, d + 2)
 //         grad_in     (b, df, n_filled)
 __global__ void slice_grad_kernel(int d, int df, int n_points, int n_filled,
-                                  const float *grad_out,
-                                  const int *offset,
-                                  const float *barycentric,
-                                  float *grad_in) {
+                                  const float *__restrict__ grad_out,
+                                  const int *__restrict__ offset,
+                                  const float *__restrict__ barycentric,
+                                  float *__restrict__ grad_in) {
   int batch_idx = blockIdx.x;
 
   for (int i = threadIdx.y; i < df; i += blockDim.y) {
@@ -700,10 +701,10 @@ __global__ void slice_grad_kernel(int d, int df, int n_points, int n_filled,
 //        conv_neighbors (b, n_neighbors, n_filled)
 //        grad_weights   (df_out, df_in, n_neighbors)
 __global__ void weights_grad_kernel(int df_in, int df_out, int n_filled, int n_neighbors,
-                                    const float *grad_out,
-                                    const float *lattices_in,
-                                    const int *conv_neighbors,
-                                    float *grad_weights) {
+                                    const float *__restrict__ grad_out,
+                                    const float *__restrict__ lattices_in,
+                                    const int *__restrict__ conv_neighbors,
+                                    float *__restrict__ grad_weights) {
   int batch_idx = blockIdx.x;
 
   for (int i = threadIdx.y; i < df_out; i += blockDim.y) {

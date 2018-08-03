@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include "cuda_utils.h"
 #include "permutohedral_lattice.h"
-#include <THC.h>
 
 void free_cuda_data_callback(void *p, void *data) {
   CUDA_CHECK_ERROR(cudaFree(data));
